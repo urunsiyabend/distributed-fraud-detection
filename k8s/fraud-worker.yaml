@@ -18,7 +18,7 @@ spec:
         - name: fraud-worker
           image: fraud-detection:latest
           imagePullPolicy: Never
-          command: ["/fraud-detection", "--mode=worker"]
+          command: ["/fraud-detection"]
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -60,6 +60,6 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 8081
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
