@@ -4,7 +4,7 @@ metadata:
   name: fraud-api
   namespace: fraud-detection
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: fraud-api
   ports:
