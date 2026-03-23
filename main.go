@@ -100,11 +100,12 @@ func main() {
 
 	// --- Ports (raw) ---
 	rawCounter := infraRedis.NewTransactionCounter(rdb)
-	rawDeviceRepo := postgres.NewDeviceRepository(db)
+	pgDeviceRepo := postgres.NewDeviceRepository(db)
+	cachedDeviceRepo := infraRedis.NewDeviceRepository(rdb, pgDeviceRepo)
 
 	// --- Circuit breakers ---
 	txCounter := resilience.NewCircuitBreakerTransactionCounter(rawCounter, metrics)
-	deviceRepo := resilience.NewCircuitBreakerDeviceRepository(rawDeviceRepo, metrics)
+	deviceRepo := resilience.NewCircuitBreakerDeviceRepository(cachedDeviceRepo, metrics)
 
 	// --- Idempotency ---
 	idempotencyStore := infraRedis.NewIdempotencyStore(rdb, 24*time.Hour)
