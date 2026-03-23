@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fraud
+      POSTGRES_PASSWORD: fraud
+      POSTGRES_DB: fraud
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./load-tests/seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraud"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2-alpine
+    ports:
+      - "4222:4222"
+
+  fraud-api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_DSN: "postgres://fraud:fraud@postgres:5432/fraud?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      NATS_URL: "nats://nats:4222"
+      OTEL_ENDPOINT: "otel-collector:4317"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./load-tests/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - fraud-api
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./load-tests/grafana-datasource.yml:/etc/grafana/provisioning/datasources/ds.yml
+      - ./load-tests/grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/provider.yml
+      - ./load-tests/grafana-dashboard.json:/var/lib/grafana/dashboards/fraud.json
+    depends_on:
+      - prometheus

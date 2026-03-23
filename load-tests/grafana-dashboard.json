@@ -1,0 +1,116 @@
+{
+  "annotations": { "list": [] },
+  "title": "Fraud Detection - Load Test",
+  "uid": "fraud-load-test",
+  "panels": [
+    {
+      "title": "Assessment Latency (p95/p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(fraud_assessment_duration_seconds_bucket[30s]))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(fraud_assessment_duration_seconds_bucket[30s]))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Throughput (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(fraud_decision_total[30s]))",
+          "legendFormat": "total"
+        }
+      ]
+    },
+    {
+      "title": "Decisions by Type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(fraud_decision_total[30s])",
+          "legendFormat": "{{decision}}"
+        }
+      ]
+    },
+    {
+      "title": "Rule Triggers / Fallbacks",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(fraud_rule_triggered_total[30s])",
+          "legendFormat": "triggered: {{rule_name}}"
+        },
+        {
+          "expr": "rate(fraud_rule_fallback_total[30s])",
+          "legendFormat": "fallback: {{rule_name}}"
+        }
+      ]
+    },
+    {
+      "title": "Goroutines",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "go_goroutines{job=\"fraud-api\"}",
+          "legendFormat": "goroutines"
+        }
+      ]
+    },
+    {
+      "title": "Memory Alloc",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "go_memstats_alloc_bytes{job=\"fraud-api\"}",
+          "legendFormat": "alloc bytes"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "title": "Circuit Breaker Transitions",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "rate(fraud_circuit_breaker_transitions[1m])",
+          "legendFormat": "{{name}} {{from}}→{{to}}"
+        }
+      ]
+    },
+    {
+      "title": "Outbox Status",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "fraud_outbox_pending_total",
+          "legendFormat": "pending"
+        },
+        {
+          "expr": "rate(fraud_outbox_published_total[30s])",
+          "legendFormat": "published/s"
+        },
+        {
+          "expr": "fraud_outbox_dead_total",
+          "legendFormat": "dead"
+        }
+      ]
+    }
+  ],
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "schemaVersion": 39
+}
