@@ -42,7 +42,12 @@ INSERT INTO config (key, value) VALUES
     ('rules.amount.fallback_score', '20'),
     ('rules.device.missing_score', '30'),
     ('rules.device.unknown_score', '35'),
-    ('rules.device.fallback_score', '15')
+    ('rules.device.fallback_score', '15'),
+    ('rules.location.max_distance_km', '500'),
+    ('rules.location.score', '60'),
+    ('rules.location.fallback_score', '20'),
+    ('rules.pattern.score', '45'),
+    ('rules.pattern.fallback_score', '15')
 ON CONFLICT (key) DO NOTHING;
 
 -- Seed known devices for 100 test users
