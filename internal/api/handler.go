@@ -10,6 +10,11 @@ import (
 	"distributed-fraud-detection/internal/application"
 	"distributed-fraud-detection/internal/domain"
 	"distributed-fraud-detection/internal/infrastructure/postgres"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Handler struct {
@@ -153,24 +158,50 @@ func (h *Handler) AssessTransaction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) saveAtomically(ctx context.Context, assessment domain.FraudAssessment) error {
+	tracer := otel.GetTracerProvider().Tracer("fraud-detection")
+
+	ctx, span := tracer.Start(ctx, "handler.saveAtomically")
+	defer span.End()
+
+	ctx, beginSpan := tracer.Start(ctx, "db.begin")
 	dbTx, err := h.uow.Begin(ctx)
+	beginSpan.End()
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "begin tx failed")
 		return err
 	}
 
-	if err := h.assessments.SaveWithTx(ctx, dbTx, assessment); err != nil {
+	ctx, saveSpan := tracer.Start(ctx, "db.save_assessment")
+	err = h.assessments.SaveWithTx(ctx, dbTx, assessment)
+	saveSpan.End()
+	if err != nil {
 		h.uow.Rollback(dbTx)
+		span.RecordError(err)
 		return err
 	}
 
+	ctx, outboxSpan := tracer.Start(ctx, "db.save_outbox",
+		trace.WithAttributes(attribute.Int("event_count", len(assessment.Events()))),
+	)
 	for _, event := range assessment.Events() {
 		if err := h.outbox.SaveWithinTx(ctx, dbTx, event); err != nil {
 			h.uow.Rollback(dbTx)
+			outboxSpan.RecordError(err)
+			outboxSpan.End()
 			return err
 		}
 	}
+	outboxSpan.End()
 
-	return h.uow.Commit(dbTx)
+	_, commitSpan := tracer.Start(ctx, "db.commit")
+	err = h.uow.Commit(dbTx)
+	commitSpan.End()
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "commit failed")
+	}
+	return err
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

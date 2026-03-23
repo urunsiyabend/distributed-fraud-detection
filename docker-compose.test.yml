@@ -30,6 +30,14 @@ services:
     ports:
       - "4222:4222"
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
   fraud-api:
     build: .
     ports:
@@ -38,13 +46,15 @@ services:
       POSTGRES_DSN: "postgres://fraud:fraud@postgres:5432/fraud?sslmode=disable"
       REDIS_ADDR: "redis:6379"
       NATS_URL: "nats://nats:4222"
-      OTEL_ENDPOINT: "otel-collector:4317"
+      OTEL_ENDPOINT: "jaeger:4317"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       nats:
+        condition: service_started
+      jaeger:
         condition: service_started
 
   prometheus:
