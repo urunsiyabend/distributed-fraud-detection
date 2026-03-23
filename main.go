@@ -29,6 +29,13 @@ import (
 	_ "github.com/lib/pq"
 )
 
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -40,10 +47,12 @@ func main() {
 		slog.String("env", "production"),
 	)
 
-	// --- Tracer ---
-	tracer, err := observability.NewTracer(ctx, "fraud-detection", "localhost:4317")
+	// --- Tracer (optional — non-fatal if collector unavailable) ---
+	otelEndpoint := envOrDefault("OTEL_ENDPOINT", "localhost:4317")
+	tracer, err := observability.NewTracer(ctx, "fraud-detection", otelEndpoint)
 	if err != nil {
-		log.Fatalf("tracer init: %v", err)
+		log.Printf("tracer init failed (continuing without tracing): %v", err)
+		tracer = observability.NewNoopTracer()
 	}
 	defer tracer.Shutdown(ctx)
 
@@ -55,18 +64,21 @@ func main() {
 	}
 
 	// --- Postgres ---
-	db, err := sql.Open("postgres", "postgres://user:pass@localhost:5432/fraud?sslmode=disable")
+	pgDSN := envOrDefault("POSTGRES_DSN", "postgres://user:pass@localhost:5432/fraud?sslmode=disable")
+	db, err := sql.Open("postgres", pgDSN)
 	if err != nil {
 		log.Fatalf("postgres open: %v", err)
 	}
 	defer db.Close()
 
 	// --- Redis ---
-	rdb := goRedis.NewClient(&goRedis.Options{Addr: "localhost:6379"})
+	redisAddr := envOrDefault("REDIS_ADDR", "localhost:6379")
+	rdb := goRedis.NewClient(&goRedis.Options{Addr: redisAddr})
 	defer rdb.Close()
 
 	// --- NATS ---
-	nc, err := nats.Connect("nats://localhost:4222")
+	natsURL := envOrDefault("NATS_URL", "nats://localhost:4222")
+	nc, err := nats.Connect(natsURL)
 	if err != nil {
 		log.Fatalf("nats connect: %v", err)
 	}
@@ -167,10 +179,8 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	server.Shutdown(shutdownCtx) // 1. stop accepting HTTP requests
-	pool.Shutdown()              // 2. drain worker pool
-	// 3. outbox poller stops via ctx.Done() (already cancelled)
-	// 4. deferred: nc.Close(), rdb.Close(), db.Close(), tracer.Shutdown()
+	server.Shutdown(shutdownCtx)
+	pool.Shutdown()
 
 	log.Println("shutting down")
 }

@@ -58,5 +58,16 @@ func (t *Tracer) TracerForApp() trace.Tracer {
 }
 
 func (t *Tracer) Shutdown(ctx context.Context) error {
+	if t.provider == nil {
+		return nil
+	}
 	return t.provider.Shutdown(ctx)
+}
+
+func NewNoopTracer() *Tracer {
+	provider := trace.NewNoopTracerProvider()
+	return &Tracer{
+		provider: nil,
+		tracer:   provider.Tracer("noop"),
+	}
 }

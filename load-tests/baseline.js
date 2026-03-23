@@ -13,6 +13,14 @@ export const options = {
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
+function safeParse(body) {
+    try {
+        return JSON.parse(body);
+    } catch (e) {
+        return null;
+    }
+}
+
 export default function () {
     const payload = JSON.stringify(generateTransaction());
 
@@ -23,13 +31,12 @@ export default function () {
         },
     });
 
+    const body = safeParse(res.body);
+
     check(res, {
         'status is 202': (r) => r.status === 202,
-        'has transaction_id': (r) => JSON.parse(r.body).transaction_id !== '',
-        'has decision': (r) => ['approved', 'blocked', 'review', 'pending'].includes(JSON.parse(r.body).decision),
-        'fast_path is true or pending': (r) => {
-            const body = JSON.parse(r.body);
-            return body.fast_path === true || body.decision === 'pending';
-        },
+        'has transaction_id': () => body && body.transaction_id !== '',
+        'has decision': () => body && ['approved', 'blocked', 'review', 'pending'].includes(body.decision),
+        'fast_path is true or pending': () => body && (body.fast_path === true || body.decision === 'pending'),
     });
 }
