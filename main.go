@@ -69,8 +69,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("postgres open: %v", err)
 	}
-	db.SetMaxOpenConns(50)
-	db.SetMaxIdleConns(25)
+	db.SetMaxOpenConns(150)
+	db.SetMaxIdleConns(50)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 

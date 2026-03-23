@@ -25,6 +25,22 @@ services:
       timeout: 5s
       retries: 10
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    ports:
+      - "6432:6432"
+    volumes:
+      - ./load-tests/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
+      - ./load-tests/pgbouncer-userlist.txt:/etc/pgbouncer/userlist.txt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U fraud"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
   nats:
     image: nats:2-alpine
     ports:
@@ -41,12 +57,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      POSTGRES_DSN: "postgres://fraud:fraud@postgres:5432/fraud?sslmode=disable"
+      POSTGRES_DSN: "postgres://fraud:fraud@pgbouncer:6432/fraud?sslmode=disable"
       REDIS_ADDR: "redis:6379"
       NATS_URL: "nats://nats:4222"
       OTEL_ENDPOINT: "jaeger:4317"
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
