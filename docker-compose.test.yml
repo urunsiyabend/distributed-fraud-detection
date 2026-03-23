@@ -31,12 +31,10 @@ services:
       - "4222:4222"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/jaeger:2.5.0
     ports:
       - "16686:16686"
       - "4317:4317"
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
 
   fraud-api:
     build: .
