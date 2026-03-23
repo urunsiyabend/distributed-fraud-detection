@@ -103,6 +103,15 @@ func main() {
 	pgDeviceRepo := postgres.NewDeviceRepository(db)
 	cachedDeviceRepo := infraRedis.NewDeviceRepository(rdb, pgDeviceRepo)
 
+	// --- Device cache warmup ---
+	allDevices, err := pgDeviceRepo.LoadAll(ctx)
+	if err != nil {
+		log.Fatalf("loading devices from postgres: %v", err)
+	}
+	if err := cachedDeviceRepo.WarmUp(ctx, allDevices); err != nil {
+		log.Fatalf("warming device cache: %v", err)
+	}
+
 	// --- Circuit breakers ---
 	txCounter := resilience.NewCircuitBreakerTransactionCounter(rawCounter, metrics)
 	deviceRepo := resilience.NewCircuitBreakerDeviceRepository(cachedDeviceRepo, metrics)
