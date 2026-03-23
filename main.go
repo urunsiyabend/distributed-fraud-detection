@@ -69,11 +69,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("postgres open: %v", err)
 	}
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 
 	// --- Redis ---
 	redisAddr := envOrDefault("REDIS_ADDR", "localhost:6379")
-	rdb := goRedis.NewClient(&goRedis.Options{Addr: redisAddr})
+	rdb := goRedis.NewClient(&goRedis.Options{
+		Addr:         redisAddr,
+		PoolSize:     50,
+		MinIdleConns: 10,
+	})
 	defer rdb.Close()
 
 	// --- NATS ---
