@@ -14,11 +14,15 @@ import (
 func newBreaker(name string, metrics domain.CircuitBreakerMetrics) *gobreaker.CircuitBreaker[any] {
 	return gobreaker.NewCircuitBreaker[any](gobreaker.Settings{
 		Name:        name,
-		MaxRequests: 1,
-		Interval:    30 * time.Second,
-		Timeout:     60 * time.Second,
+		MaxRequests: 3,
+		Interval:    10 * time.Second,
+		Timeout:     5 * time.Second,
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			return counts.ConsecutiveFailures >= 5
+			if counts.Requests < 20 {
+				return false
+			}
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return failureRatio > 0.5
 		},
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
 			log.Printf("circuit breaker %s: %s → %s", name, from.String(), to.String())
