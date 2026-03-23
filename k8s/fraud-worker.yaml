@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-worker
+  namespace: fraud-detection
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fraud-worker
+  template:
+    metadata:
+      labels:
+        app: fraud-worker
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: fraud-worker
+          image: fraud-detection:latest
+          imagePullPolicy: Never
+          command: ["/fraud-detection", "--mode=worker"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fraud-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DSN
+              value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable"
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: fraud-config
+                  key: REDIS_ADDR
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fraud-config
+                  key: NATS_URL
+            - name: OTEL_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: fraud-config
+                  key: OTEL_ENDPOINT
+            - name: WORKER_COUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: fraud-config
+                  key: WORKER_COUNT
+          envFrom:
+            - configMapRef:
+                name: fraud-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
