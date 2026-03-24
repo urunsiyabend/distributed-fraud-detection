@@ -1,0 +1,36 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress-api
+  namespace: fraud-detection
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - fraud-detection
+    labelSelectors:
+      app: fraud-api
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: "60s"
+
+# Expected behavior:
+# - 2 CPU stress workers at 80% load on each fraud-api pod
+# - Pod CPU limit is 500m — stress workers consume most of it
+# - Assessment latency increases due to CPU contention:
+#   - Rule evaluation: normally <1ms, may rise to 5-10ms
+#   - JSON serialization: slower
+#   - Go GC pauses: more frequent under pressure
+# - HPA SHOULD trigger:
+#   - CPU utilization jumps well above 50% threshold
+#   - Scale-up within 30s stabilization window
+#   - New pods without stress → absorb traffic → CPU drops
+# - Circuit breaker: should NOT trip (no errors, just slow)
+# - Key metric to watch:
+#   - HPA replica count increases (2 → 4+)
+#   - fraud_assessment_duration_seconds p95 increases
+#   - HTTP p95 increases but 0% error rate
+#   - After stress ends: scale-down after 120s stabilization
+# - This validates HPA auto-scaling under CPU pressure

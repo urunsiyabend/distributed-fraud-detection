@@ -1,0 +1,36 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: postgres-kill
+  namespace: fraud-detection
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - fraud-detection
+    labelSelectors:
+      app: postgres
+  duration: "30s"
+
+# Expected behavior:
+# - Postgres pod killed, StatefulSet recreates with PVC (data preserved)
+# - Recovery time: ~10-15s (pg startup + readiness probe)
+# - During downtime:
+#   - Config cache: stale values served from memory (last refresh)
+#     → fraud_config_refresh_total{status="error"} increments
+#   - Assessment: rules evaluate fine (Redis + in-memory)
+#   - saveAtomically: FAILS — cannot persist to DB
+#     → HTTP 500 responses until Postgres recovers
+#   - Outbox poller: GetPending fails, logs error, retries next cycle
+#   - PgBouncer: queues connections, returns errors after timeout
+# - After Postgres recovers:
+#   - PgBouncer reconnects automatically
+#   - Config cache refreshes on next 60s cycle
+#   - Outbox poller resumes, publishes backlogged events
+#   - No data loss — PVC preserves all committed data
+# - Key metric to watch:
+#   - HTTP 500 spike during downtime (expected)
+#   - fraud_config_refresh_total{status="error"} increments
+#   - fraud_outbox_pending_total backlog after recovery
+# - This is the WORST failure mode — Postgres is source of truth

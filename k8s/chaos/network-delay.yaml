@@ -1,0 +1,45 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-postgres
+  namespace: fraud-detection
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - fraud-detection
+    labelSelectors:
+      app: fraud-api
+  delay:
+    latency: "100ms"
+    correlation: "50"
+    jitter: "20ms"
+  direction: to
+  target:
+    selector:
+      namespaces:
+        - fraud-detection
+      labelSelectors:
+        app: pgbouncer
+    mode: all
+  duration: "60s"
+
+# Expected behavior:
+# - 100ms ± 20ms added to every fraud-api → PgBouncer packet
+# - Assessment rules unaffected (Redis path, not Postgres)
+# - saveAtomically latency increases:
+#   - db.begin: +100ms (connection acquisition through PgBouncer)
+#   - db.save_assessment: +100ms
+#   - db.save_outbox: +100ms
+#   - db.commit: +100ms
+#   - Total: ~400ms added to each request
+# - 20ms fast path budget: assessment itself stays under 5ms
+#   but total HTTP response time jumps to ~450ms
+# - Circuit breaker: should NOT trip — requests succeed, just slow
+# - HPA: CPU may not spike (I/O wait, not CPU)
+# - Key metric to watch:
+#   - fraud_assessment_duration_seconds p95 stays low (~5ms)
+#   - HTTP p95 jumps to ~400-500ms (Jaeger shows db.* spans bloated)
+#   - 0% error rate — delay is not failure
+# - This simulates cross-AZ or degraded network to database

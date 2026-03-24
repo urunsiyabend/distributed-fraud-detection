@@ -1,0 +1,32 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: redis-kill
+  namespace: fraud-detection
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - fraud-detection
+    labelSelectors:
+      app: redis
+  duration: "30s"
+
+# Expected behavior:
+# - Redis pod killed, StatefulSet recreates it in ~5-10s
+# - During downtime:
+#   - VelocityRule: circuit breaker trips after 50%+ failure ratio (20 req min)
+#     → fallback score used, assessments continue
+#   - DeviceRule: Redis cache miss → falls through to Postgres
+#     → slower but functional (cache miss path)
+#   - Idempotency: Redis unavailable → SETNX fails
+#     → duplicate requests possible but not data loss
+# - After Redis recovers:
+#   - Circuit breaker recovers in 5s (half-open → probe → closed)
+#   - Device cache needs warmup again (cold cache)
+#   - Velocity counters lost (acceptable — AP system)
+# - Key metric to watch:
+#   - fraud_rule_fallback_total{rule_name="velocity"} spikes
+#   - fraud_circuit_breaker_transitions counter increments
+#   - No 5xx errors — system degrades gracefully

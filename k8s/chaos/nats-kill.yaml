@@ -1,0 +1,33 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: nats-kill
+  namespace: fraud-detection
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - fraud-detection
+    labelSelectors:
+      app: nats
+  duration: "30s"
+
+# Expected behavior:
+# - NATS pod killed, Deployment recreates in ~5s
+# - During downtime:
+#   - Fast path: UNAFFECTED — assessment + saveAtomically works
+#     (outbox pattern decouples NATS from request path)
+#   - Outbox poller: NATS publish fails → MarkFailed, retry next cycle
+#   - Workers: NATS subscription lost, no new messages processed
+#   - Slow path: paused until NATS recovers
+# - After NATS recovers:
+#   - nats.go client auto-reconnects
+#   - Outbox poller publishes backlogged pending events
+#   - Workers resubscribe, resume slow path processing
+#   - No event loss — outbox table is persistent
+# - Key metric to watch:
+#   - fraud_outbox_pending_total rises during downtime
+#   - fraud_outbox_published_total resumes after recovery
+#   - HTTP latency and error rate UNCHANGED (outbox pattern wins)
+# - This is WHY we built the outbox pattern
