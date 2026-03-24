@@ -28,6 +28,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	goRedis "github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 
 	_ "github.com/lib/pq"
@@ -192,7 +193,9 @@ func main() {
 	}()
 
 	// --- gRPC server ---
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 	fraudv1.RegisterFraudServiceServer(grpcServer, fraudGRPC.NewFraudServer(fraudGRPC.FraudServerDeps{
 		Assessor:    assessor,
 		UoW:         uow,

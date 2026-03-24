@@ -98,6 +98,7 @@ services:
     environment:
       POSTGRES_DSN: "postgres://txn:txn@transaction-db:5432/transactions?sslmode=disable"
       FRAUD_GRPC_ADDR: "fraud-api:50051"
+      OTEL_ENDPOINT: "jaeger:4317"
     depends_on:
       transaction-db:
         condition: service_healthy

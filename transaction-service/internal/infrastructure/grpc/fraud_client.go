@@ -10,6 +10,10 @@ import (
 	fraudv1 "github.com/urunsiyabend/distributed-fraud-detection/proto/fraud/v1"
 
 	"github.com/sony/gobreaker/v2"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	gogrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -17,6 +21,7 @@ import (
 type FraudClient struct {
 	client  fraudv1.FraudServiceClient
 	breaker *gobreaker.CircuitBreaker[*fraudv1.AssessResponse]
+	tracer  trace.Tracer
 }
 
 func NewFraudClient(addr string) (*FraudClient, error) {
@@ -26,6 +31,8 @@ func NewFraudClient(addr string) (*FraudClient, error) {
 	conn, err := gogrpc.DialContext(ctx, addr,
 		gogrpc.WithTransportCredentials(insecure.NewCredentials()),
 		gogrpc.WithBlock(),
+		gogrpc.WithDefaultCallOptions(gogrpc.CallContentSubtype(fraudv1.JSONCodecName)),
+		gogrpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", addr, err)
@@ -52,10 +59,19 @@ func NewFraudClient(addr string) (*FraudClient, error) {
 	return &FraudClient{
 		client:  fraudv1.NewFraudServiceClient(conn),
 		breaker: cb,
+		tracer:  otel.Tracer("transaction-service"),
 	}, nil
 }
 
 func (f *FraudClient) Check(ctx context.Context, tx *domain.Transaction) (string, int, []string, error) {
+	ctx, span := f.tracer.Start(ctx, "fraud.check",
+		trace.WithAttributes(
+			attribute.String("transaction.id", tx.ID),
+			attribute.Float64("transaction.amount", tx.Amount.Amount),
+		),
+	)
+	defer span.End()
+
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
@@ -75,8 +91,13 @@ func (f *FraudClient) Check(ctx context.Context, tx *domain.Transaction) (string
 		})
 	})
 	if err != nil {
+		span.SetAttributes(attribute.String("fraud.fallback", "review"))
 		return "review", 0, []string{"fraud service unavailable, requiring MFA"}, nil
 	}
 
+	span.SetAttributes(
+		attribute.String("fraud.decision", resp.Decision),
+		attribute.Int("fraud.risk_score", int(resp.RiskScore)),
+	)
 	return resp.Decision, int(resp.RiskScore), resp.Reasons, nil
 }

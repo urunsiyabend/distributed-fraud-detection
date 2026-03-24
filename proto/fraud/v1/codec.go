@@ -6,21 +6,14 @@ import (
 	"google.golang.org/grpc/encoding"
 )
 
+const JSONCodecName = "json"
+
 func init() {
-	encoding.RegisterCodec(JSONCodec{})
+	encoding.RegisterCodec(jsonCodec{})
 }
 
-// JSONCodec uses JSON instead of protobuf for gRPC serialization.
-type JSONCodec struct{}
+type jsonCodec struct{}
 
-func (JSONCodec) Marshal(v any) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-func (JSONCodec) Unmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
-}
-
-func (JSONCodec) Name() string {
-	return "proto"
-}
+func (jsonCodec) Marshal(v any) ([]byte, error)   { return json.Marshal(v) }
+func (jsonCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
+func (jsonCodec) Name() string                     { return JSONCodecName }
