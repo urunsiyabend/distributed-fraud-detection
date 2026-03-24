@@ -8,8 +8,12 @@ spec:
   selector:
     app: fraud-api
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
+    - name: grpc
+      port: 50051
+      targetPort: 50051
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,6 +37,7 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
+            - containerPort: 50051
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:

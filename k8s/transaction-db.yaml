@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-db
+  namespace: fraud-detection
+spec:
+  clusterIP: None
+  selector:
+    app: transaction-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: transaction-db
+  namespace: fraud-detection
+spec:
+  serviceName: transaction-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-db
+  template:
+    metadata:
+      labels:
+        app: transaction-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: txn
+            - name: POSTGRES_PASSWORD
+              value: txn
+            - name: POSTGRES_DB
+              value: transactions
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "txn"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: txn-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: txn-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

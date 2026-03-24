@@ -1,0 +1,29 @@
+syntax = "proto3";
+package fraud.v1;
+
+option go_package = "github.com/urunsiyabend/distributed-fraud-detection/proto/fraud/v1;fraudv1";
+
+service FraudService {
+  rpc Assess(AssessRequest) returns (AssessResponse);
+}
+
+message AssessRequest {
+  string transaction_id = 1;
+  double amount = 2;
+  string currency = 3;
+  string sender_id = 4;
+  string receiver_id = 5;
+  string device_id = 6;
+  string ip = 7;
+  double lat = 8;
+  double lng = 9;
+  string payment_method = 10;
+  string timestamp = 11;
+}
+
+message AssessResponse {
+  string transaction_id = 1;
+  string decision = 2;
+  int32 risk_score = 3;
+  repeated string reasons = 4;
+}

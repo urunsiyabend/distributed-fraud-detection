@@ -4,9 +4,9 @@ import { generateTransaction } from './data.js';
 
 export const options = {
     stages: [
-        { duration: '30s', target: 100 },  // ramp up
-        { duration: '1m',  target: 100 },  // sustain
-        { duration: '30s', target: 0 },    // ramp down
+        { duration: '30s', target: 200 },  // ramp up
+        { duration: '2m',  target: 200 },  // sustain
+        { duration: '30s', target: 0 },    // ra mp down
     ],
     thresholds: {
         http_req_duration: ['p(95)<50'],
