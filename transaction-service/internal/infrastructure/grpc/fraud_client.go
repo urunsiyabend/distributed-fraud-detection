@@ -20,12 +20,18 @@ type FraudClient struct {
 }
 
 func NewFraudClient(addr string) (*FraudClient, error) {
-	conn, err := gogrpc.NewClient(addr,
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := gogrpc.DialContext(ctx, addr,
 		gogrpc.WithTransportCredentials(insecure.NewCredentials()),
+		gogrpc.WithBlock(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", addr, err)
 	}
+
+	log.Printf("connected to fraud-service at %s", addr)
 
 	cb := gobreaker.NewCircuitBreaker[*fraudv1.AssessResponse](gobreaker.Settings{
 		Name:        "fraud-service",
@@ -33,7 +39,10 @@ func NewFraudClient(addr string) (*FraudClient, error) {
 		Interval:    10 * time.Second,
 		Timeout:     5 * time.Second,
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			return counts.ConsecutiveFailures >= 3
+			if counts.Requests < 5 {
+				return false
+			}
+			return float64(counts.TotalFailures)/float64(counts.Requests) > 0.5
 		},
 		OnStateChange: func(name string, from, to gobreaker.State) {
 			log.Printf("circuit breaker %s: %s → %s", name, from.String(), to.String())
@@ -47,7 +56,7 @@ func NewFraudClient(addr string) (*FraudClient, error) {
 }
 
 func (f *FraudClient) Check(ctx context.Context, tx *domain.Transaction) (string, int, []string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	resp, err := f.breaker.Execute(func() (*fraudv1.AssessResponse, error) {
@@ -66,7 +75,6 @@ func (f *FraudClient) Check(ctx context.Context, tx *domain.Transaction) (string
 		})
 	})
 	if err != nil {
-		// CB open or timeout → default to review + MFA
 		return "review", 0, []string{"fraud service unavailable, requiring MFA"}, nil
 	}
 

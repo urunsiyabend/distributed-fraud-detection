@@ -15,6 +15,20 @@ services:
       timeout: 5s
       retries: 10
 
+  transaction-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: txn
+      POSTGRES_PASSWORD: txn
+      POSTGRES_DB: transactions
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U txn"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports:
@@ -53,9 +67,13 @@ services:
       - "4317:4317"
 
   fraud-api:
-    build: .
+    build:
+      context: .
+      dockerfile: fraud-detection/Dockerfile
+    entrypoint: ["/fraud-api"]
     ports:
       - "8080:8080"
+      - "50051:50051"
     environment:
       POSTGRES_DSN: "postgres://fraud:fraud@pgbouncer:6432/fraud?sslmode=disable"
       REDIS_ADDR: "redis:6379"
@@ -69,6 +87,21 @@ services:
       nats:
         condition: service_started
       jaeger:
+        condition: service_started
+
+  transaction-service:
+    build:
+      context: .
+      dockerfile: transaction-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      POSTGRES_DSN: "postgres://txn:txn@transaction-db:5432/transactions?sslmode=disable"
+      FRAUD_GRPC_ADDR: "fraud-api:50051"
+    depends_on:
+      transaction-db:
+        condition: service_healthy
+      fraud-api:
         condition: service_started
 
   prometheus:
